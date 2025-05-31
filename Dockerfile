@@ -24,7 +24,7 @@ COPY templates/ templates/
 
 # 5. Informa qual porta a aplicação irá escutar.
 #    É mais para documentação do Docker. O Render injeta a variável $PORT.
-EXPOSE 8000 # Uma porta comum para aplicações web.
+EXPOSE 8000
 
 # 6. Comando para iniciar a aplicação Flask com Gunicorn.
 #    Este comando será executado quando o contêiner iniciar.
