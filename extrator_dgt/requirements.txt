@@ -12,7 +12,6 @@ libcst==1.1.0
 MarkupSafe==2.1.5
 mypy-extensions==1.0.0
 openpyxl==3.1.5
-oracledb==2.2.1
 packaging==24.1
 pathspec==0.12.1
 pycparser==2.22
