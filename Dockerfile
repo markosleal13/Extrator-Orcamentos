@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 4. Copia o código da sua aplicação Flask (app.py) e a pasta 'templates'.
 #    Certifique-se que 'app.py' e a pasta 'templates/' estão na raiz do seu repositório GitHub.
 COPY app.py .
-COPY templates/ templates/
+COPY extrator_dgt/templates/ templates/ 
 
 # EXCLUÍDO:
 # - As linhas 'COPY extrator_dgt', 'COPY extrator_dgt/settings_base.py'
