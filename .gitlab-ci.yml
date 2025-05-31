@@ -1,0 +1,89 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  TAG: 2.17.0
+  TJBA_URL: docker://$CI_REGISTRY_IMAGE
+  REGISTRO_NOME: $DOCKER_REGISTRO_URL/${CI_PROJECT_PATH}
+  DOCKER_HUB_IMAGE: $DOCKER_HUB_IMAGE
+  DOCKER_HUB_PASSWORD: $DOCKER_HUB_PASSWORD
+  DOCKER_HUB_REGISTRY: $DOCKER_HUB_REGISTRY
+  DOCKER_HUB_USER: $DOCKER_HUB_USER
+  IMAGE_BACKEND: $CI_REGISTRY_IMAGE/$CI_PROJECT_NAME:$CI_COMMIT_BRANCH-$CI_COMMIT_SHORT_SHA
+  
+build:
+  stage: build
+  image: regis.tjba.jus.br/k8s/imagens/kaniko-executor:debug
+  tags:
+    - tjba
+  before_script:
+    - echo ${CI_COMMIT_BRANCH}
+    - echo ${CI_PROJECT_DIR}
+    - echo ${TJBA_URL}
+    - echo ${TAG}
+    - echo ${CI_REGISTRY}
+    - echo ${CI_REGISTRY_USER}
+    - echo ${CI_REGISTRY_PASSWORD}
+    - echo ${CONTAINER_IMAGE}
+    - echo ${IMAGE_BACKEND}
+    - echo ${CI_PROJECT_NAME}
+
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    - |-
+      OPTS="--context ${CI_PROJECT_DIR}"
+      OPTS="$OPTS --dockerfile ${CI_PROJECT_DIR}/Dockerfile"
+      OPTS="$OPTS --destination ${IMAGE_BACKEND}"
+      echo "executor $OPTS"
+      /bin/sh -c "executor $OPTS"
+
+deploy:
+  stage: deploy
+  environment:
+    name: $CI_COMMIT_BRANCH
+
+  tags:
+    - tjba
+  image:
+    name: regis.tjba.jus.br/k8s/imagens/helm-kubectl:3.11.3
+    entrypoint:
+    - ''
+  before_script:
+    - |-
+      if [[ "${CI_COMMIT_BRANCH,,}" =~ (dev|desenv|dsnv) ]] ; then
+          ENV_SLUG=dev
+      elif [[ "${CI_COMMIT_BRANCH,,}" =~ (hmg|hom|hml) ]] ; then
+          ENV_SLUG=hmg
+      elif [[ "${CI_COMMIT_BRANCH,,}" =~ (qa) ]] ; then
+          ENV_SLUG=qa
+      elif [[ "${CI_COMMIT_BRANCH,,}" =~ (master|main) ]]  ; then
+          ENV_SLUG=prd
+      fi
+      if [ -n "$NAMESPACE" ]; then
+          export NAMESPACE="$NAMESPACE-$ENV_SLUG"
+      else
+          export NAMESPACE="$(echo -n $CI_PROJECT_NAME | tr [:upper:] [:lower:] | sed 's/[^0-9a-z\-]/-/g')-$ENV_SLUG"
+      fi
+    - echo ${NAMESPACE}
+    - echo ${CI_COMMIT_BRANCH}
+    - export APP_UID=" $( expr 10000 + $CI_PROJECT_ID )"
+    - export APP_GID=" $( expr 10000 + $CI_PROJECT_NAMESPACE_ID )"
+    - echo ${APP_UID}
+    - echo ${APP_GID}
+    - echo $CI_COMMIT_BRANCH
+    - echo $REGISTRY_TOKEN_RO
+    - echo ${KUBECONFIG}
+    - echo ${KUBECONFIG} | base64 -d > /tmp/k8s_config
+    - chmod 600 /tmp/k8s_config
+    - ls -l /tmp/k8s_config
+    - export KUBECONFIG=/tmp/k8s_config
+    - echo "$HELM_VALUES" | sed -e "s/runAsUser:.*$/runAsUser:$APP_UID/;s/runAsGroup:.*/runAsGroup:$APP_GID/" > /tmp/values.yaml
+    - echo "$HELM_VALUES"
+  script:
+    - helm registry login $CI_REGISTRY -p ${CI_REGISTRY_PASSWORD} -u ${CI_REGISTRY_USER}
+    - helm upgrade --install ${CI_PROJECT_NAME} $CHART_REPO -n $NAMESPACE -f /tmp/values.yaml --wait --timeout 9m0s
+    # - kubectl config set-context dev --namespace=paineis-dinamicos-transparencia-dev
+    # - kubectl apply -f deployment.yaml 
